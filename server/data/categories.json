@@ -1,0 +1,9 @@
+[
+  { "id": "food", "label": "อาหาร", "emoji": "🍜" },
+  { "id": "animals", "label": "สัตว์", "emoji": "🐶" },
+  { "id": "places", "label": "สถานที่", "emoji": "🗺️" },
+  { "id": "movies", "label": "หนังและซีรีส์", "emoji": "🎬" },
+  { "id": "music", "label": "เพลง", "emoji": "🎤" },
+  { "id": "daily", "label": "ชีวิตประจำวัน", "emoji": "🏠" },
+  { "id": "funny", "label": "คำถามฮา ๆ", "emoji": "🤪" }
+]

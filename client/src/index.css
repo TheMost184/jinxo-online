@@ -1,0 +1,79 @@
+@import 'tailwindcss';
+
+/*
+  Design tokens — "เสื่อบอร์ดเกม": พื้นม่วงพาสเทลลายจุด, หมึกสีพลัม,
+  ช่องคำตอบเป็นเหรียญสติกเกอร์หนา ๆ มีเงาแข็งเหมือนกระดาษแข็งตัดเป็นชิ้น
+*/
+@theme {
+  --font-display: 'Mitr', 'IBM Plex Sans Thai Looped', system-ui, sans-serif;
+  --font-sans: 'IBM Plex Sans Thai Looped', 'Mitr', system-ui, sans-serif;
+
+  --color-mat: #efe9ff;
+  --color-mat-deep: #ddd3fb;
+  --color-ink: #2a1b3d;
+  --color-ink-soft: #66577c;
+  --color-paper: #ffffff;
+  --color-jinx: #ff4f8b;
+  --color-jinx-soft: #ffd3e3;
+  --color-sky: #7cc8ff;
+  --color-sky-soft: #d6eeff;
+  --color-butter: #ffd75e;
+  --color-butter-soft: #fff1c4;
+  --color-mint: #3fd09b;
+  --color-mint-soft: #ccf5e5;
+  --color-danger: #e5383b;
+
+  --shadow-chunk: 0 4px 0 0 var(--color-ink);
+  --shadow-chunk-sm: 0 3px 0 0 var(--color-ink);
+  --shadow-chunk-lg: 0 6px 0 0 var(--color-ink);
+}
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    @apply bg-mat font-sans text-ink antialiased;
+    min-height: 100dvh;
+    background-image: radial-gradient(color-mix(in oklab, var(--color-ink) 9%, transparent) 1.2px, transparent 1.3px);
+    background-size: 22px 22px;
+  }
+  h1,
+  h2,
+  h3 {
+    @apply font-display;
+  }
+  :focus-visible {
+    outline: 3px solid var(--color-jinx);
+    outline-offset: 3px;
+  }
+}
+
+@layer components {
+  /* แผ่นกระดาษแข็ง: ขอบหมึก + เงาแข็ง */
+  .slab {
+    @apply rounded-[22px] border-[2.5px] border-ink bg-paper shadow-chunk-lg;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-2xl border-[2.5px] border-ink px-5 py-3 font-display text-[17px] font-medium shadow-chunk transition-[transform,box-shadow] duration-100 select-none;
+  }
+  .btn:active:not(:disabled) {
+    transform: translateY(3px);
+    box-shadow: 0 1px 0 0 var(--color-ink);
+  }
+  .btn:disabled {
+    @apply cursor-not-allowed opacity-45 shadow-none;
+  }
+  .field {
+    @apply w-full rounded-2xl border-[2.5px] border-ink bg-paper px-4 py-3 text-lg outline-none placeholder:text-ink-soft/60 focus:border-jinx;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

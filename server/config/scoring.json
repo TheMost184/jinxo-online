@@ -1,0 +1,14 @@
+{
+  "tiers": [
+    { "minPlayers": 1, "maxPlayers": 1, "points": 0, "kind": "none" },
+    { "minPlayers": 2, "maxPlayers": 2, "points": 2, "kind": "jinxo" },
+    { "minPlayers": 3, "points": 1, "kind": "match" }
+  ],
+  "lineBonus": {
+    "enabled": true,
+    "condition": "matched",
+    "rows": [1, 2, 3],
+    "columns": [3, 2, 1],
+    "diagonals": [0, 0]
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "name": "jinxo-online",
+  "private": true,
+  "version": "1.0.0",
+  "description": "JinxO Online — party board game สำหรับเล่นกับเพื่อนผ่าน Discord",
+  "workspaces": [
+    "shared",
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "dev": "concurrently -n server,client -c magenta,cyan \"npm run dev -w server\" \"npm run dev -w client\"",
+    "build": "npm run build -w client && npm run typecheck -w server",
+    "start": "npm run start -w server",
+    "test": "npm run test -w server",
+    "test:sim": "npm run test:sim -w server",
+    "typecheck": "npm run typecheck -w shared && npm run typecheck -w server && npm run typecheck -w client"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

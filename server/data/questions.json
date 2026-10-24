@@ -1,0 +1,698 @@
+[
+  {
+    "id": 1,
+    "category": "food",
+    "question": "อาหารที่นิยมกินตอนดึก",
+    "language": "th"
+  },
+  {
+    "id": 2,
+    "category": "food",
+    "question": "ผลไม้สีแดง",
+    "language": "th"
+  },
+  {
+    "id": 3,
+    "category": "food",
+    "question": "เมนูที่สั่งบ่อยในร้านอาหารตามสั่ง",
+    "language": "th"
+  },
+  {
+    "id": 4,
+    "category": "food",
+    "question": "ของกินที่ซื้อบ่อยในร้านสะดวกซื้อ",
+    "language": "th"
+  },
+  {
+    "id": 5,
+    "category": "food",
+    "question": "ผลไม้ที่มีกลิ่นแรง",
+    "language": "th"
+  },
+  {
+    "id": 6,
+    "category": "food",
+    "question": "เมนูที่ทำจากไข่",
+    "language": "th"
+  },
+  {
+    "id": 7,
+    "category": "food",
+    "question": "ขนมไทย",
+    "language": "th"
+  },
+  {
+    "id": 8,
+    "category": "food",
+    "question": "ของที่ต้องสั่งเวลากินชาบูหรือหมูกระทะ",
+    "language": "th"
+  },
+  {
+    "id": 9,
+    "category": "food",
+    "question": "เครื่องดื่มในร้านกาแฟ",
+    "language": "th"
+  },
+  {
+    "id": 10,
+    "category": "food",
+    "question": "อาหารญี่ปุ่น",
+    "language": "th"
+  },
+  {
+    "id": 11,
+    "category": "food",
+    "question": "รสชาติไอศกรีม",
+    "language": "th"
+  },
+  {
+    "id": 12,
+    "category": "food",
+    "question": "ผักที่เด็กไม่ชอบกิน",
+    "language": "th"
+  },
+  {
+    "id": 13,
+    "category": "food",
+    "question": "อาหารริมทาง (สตรีทฟู้ด)",
+    "language": "th"
+  },
+  {
+    "id": 14,
+    "category": "food",
+    "question": "เครื่องปรุงบนโต๊ะร้านก๋วยเตี๋ยว",
+    "language": "th"
+  },
+  {
+    "id": 15,
+    "category": "food",
+    "question": "ของทอด",
+    "language": "th"
+  },
+  {
+    "id": 16,
+    "category": "food",
+    "question": "ผลไม้สีเหลือง",
+    "language": "th"
+  },
+  {
+    "id": 17,
+    "category": "food",
+    "question": "อาหารที่กินตอนไม่สบาย",
+    "language": "th"
+  },
+  {
+    "id": 18,
+    "category": "food",
+    "question": "เมนูอาหารอีสาน",
+    "language": "th"
+  },
+  {
+    "id": 19,
+    "category": "animals",
+    "question": "สัตว์ที่คนนิยมเลี้ยงในบ้าน",
+    "language": "th"
+  },
+  {
+    "id": 20,
+    "category": "animals",
+    "question": "สัตว์ที่เจอได้ในสวนสัตว์",
+    "language": "th"
+  },
+  {
+    "id": 21,
+    "category": "animals",
+    "question": "สัตว์ที่อาศัยอยู่ในทะเล",
+    "language": "th"
+  },
+  {
+    "id": 22,
+    "category": "animals",
+    "question": "สัตว์ที่บินได้",
+    "language": "th"
+  },
+  {
+    "id": 23,
+    "category": "animals",
+    "question": "สัตว์ที่น่ากลัวที่สุด",
+    "language": "th"
+  },
+  {
+    "id": 24,
+    "category": "animals",
+    "question": "สัตว์ประจำปีนักษัตร",
+    "language": "th"
+  },
+  {
+    "id": 25,
+    "category": "animals",
+    "question": "สัตว์ที่มีลายบนตัว",
+    "language": "th"
+  },
+  {
+    "id": 26,
+    "category": "animals",
+    "question": "สัตว์ในฟาร์ม",
+    "language": "th"
+  },
+  {
+    "id": 27,
+    "category": "animals",
+    "question": "สัตว์ที่อยู่ได้ทั้งบนบกและในน้ำ",
+    "language": "th"
+  },
+  {
+    "id": 28,
+    "category": "animals",
+    "question": "แมลง",
+    "language": "th"
+  },
+  {
+    "id": 29,
+    "category": "animals",
+    "question": "สัตว์ที่มีพิษ",
+    "language": "th"
+  },
+  {
+    "id": 30,
+    "category": "animals",
+    "question": "สัตว์ที่ตัวใหญ่มาก",
+    "language": "th"
+  },
+  {
+    "id": 31,
+    "category": "animals",
+    "question": "สัตว์ที่ออกหากินตอนกลางคืน",
+    "language": "th"
+  },
+  {
+    "id": 32,
+    "category": "animals",
+    "question": "สัตว์ที่ชอบอยู่ในนิทาน",
+    "language": "th"
+  },
+  {
+    "id": 33,
+    "category": "animals",
+    "question": "สัตว์ที่คนชอบเอามาเปรียบเทียบนิสัยคน",
+    "language": "th"
+  },
+  {
+    "id": 34,
+    "category": "animals",
+    "question": "สัตว์ที่เจอในบ้านแล้วต้องกรี๊ด",
+    "language": "th"
+  },
+  {
+    "id": 35,
+    "category": "places",
+    "question": "ประเทศที่อยากไปเที่ยว",
+    "language": "th"
+  },
+  {
+    "id": 36,
+    "category": "places",
+    "question": "จังหวัดที่มีทะเลสวย",
+    "language": "th"
+  },
+  {
+    "id": 37,
+    "category": "places",
+    "question": "ร้านหรือโซนที่ต้องมีในห้างสรรพสินค้า",
+    "language": "th"
+  },
+  {
+    "id": 38,
+    "category": "places",
+    "question": "จังหวัดในภาคเหนือ",
+    "language": "th"
+  },
+  {
+    "id": 39,
+    "category": "places",
+    "question": "ที่เที่ยวในกรุงเทพฯ",
+    "language": "th"
+  },
+  {
+    "id": 40,
+    "category": "places",
+    "question": "สถานที่ไปเดทครั้งแรก",
+    "language": "th"
+  },
+  {
+    "id": 41,
+    "category": "places",
+    "question": "สถานที่ในโรงเรียน",
+    "language": "th"
+  },
+  {
+    "id": 42,
+    "category": "places",
+    "question": "ประเทศในทวีปเอเชีย",
+    "language": "th"
+  },
+  {
+    "id": 43,
+    "category": "places",
+    "question": "เมืองในประเทศญี่ปุ่น",
+    "language": "th"
+  },
+  {
+    "id": 44,
+    "category": "places",
+    "question": "ห้องต่าง ๆ ในบ้าน",
+    "language": "th"
+  },
+  {
+    "id": 45,
+    "category": "places",
+    "question": "สถานที่ที่มักต้องต่อคิวนาน",
+    "language": "th"
+  },
+  {
+    "id": 46,
+    "category": "places",
+    "question": "สถานที่ที่ห้ามส่งเสียงดัง",
+    "language": "th"
+  },
+  {
+    "id": 47,
+    "category": "places",
+    "question": "ประเทศในทวีปยุโรป",
+    "language": "th"
+  },
+  {
+    "id": 48,
+    "category": "places",
+    "question": "สถานที่ที่น่ากลัวตอนกลางคืน",
+    "language": "th"
+  },
+  {
+    "id": 49,
+    "category": "places",
+    "question": "สถานที่ท่องเที่ยวชื่อดังระดับโลก",
+    "language": "th"
+  },
+  {
+    "id": 50,
+    "category": "places",
+    "question": "สถานที่ที่คนชอบไปช่วงวันหยุดยาว",
+    "language": "th"
+  },
+  {
+    "id": 51,
+    "category": "movies",
+    "question": "หนังการ์ตูนดิสนีย์หรือพิกซาร์",
+    "language": "th"
+  },
+  {
+    "id": 52,
+    "category": "movies",
+    "question": "ซูเปอร์ฮีโร่",
+    "language": "th"
+  },
+  {
+    "id": 53,
+    "category": "movies",
+    "question": "ผีไทย",
+    "language": "th"
+  },
+  {
+    "id": 54,
+    "category": "movies",
+    "question": "แนวหนัง",
+    "language": "th"
+  },
+  {
+    "id": 55,
+    "category": "movies",
+    "question": "ของที่ซื้อกินในโรงหนัง",
+    "language": "th"
+  },
+  {
+    "id": 56,
+    "category": "movies",
+    "question": "ซีรีส์เกาหลีที่ดัง",
+    "language": "th"
+  },
+  {
+    "id": 57,
+    "category": "movies",
+    "question": "ตัวร้ายในหนังที่ทุกคนรู้จัก",
+    "language": "th"
+  },
+  {
+    "id": 58,
+    "category": "movies",
+    "question": "อนิเมะญี่ปุ่น",
+    "language": "th"
+  },
+  {
+    "id": 59,
+    "category": "movies",
+    "question": "ตัวละครในโดราเอมอน",
+    "language": "th"
+  },
+  {
+    "id": 60,
+    "category": "movies",
+    "question": "หนังที่มีหลายภาค",
+    "language": "th"
+  },
+  {
+    "id": 61,
+    "category": "movies",
+    "question": "แอปหรือแพลตฟอร์มดูหนัง",
+    "language": "th"
+  },
+  {
+    "id": 62,
+    "category": "movies",
+    "question": "อาชีพของพระเอกในละครไทย",
+    "language": "th"
+  },
+  {
+    "id": 63,
+    "category": "movies",
+    "question": "ฉากที่ต้องมีในละครหลังข่าว",
+    "language": "th"
+  },
+  {
+    "id": 64,
+    "category": "movies",
+    "question": "เจ้าหญิงดิสนีย์",
+    "language": "th"
+  },
+  {
+    "id": 65,
+    "category": "movies",
+    "question": "สัตว์ประหลาดหรือมอนสเตอร์ในหนัง",
+    "language": "th"
+  },
+  {
+    "id": 66,
+    "category": "movies",
+    "question": "รายการทีวีหรือเกมโชว์ที่ทุกคนเคยดู",
+    "language": "th"
+  },
+  {
+    "id": 67,
+    "category": "music",
+    "question": "เครื่องดนตรี",
+    "language": "th"
+  },
+  {
+    "id": 68,
+    "category": "music",
+    "question": "แนวเพลง",
+    "language": "th"
+  },
+  {
+    "id": 69,
+    "category": "music",
+    "question": "ศิลปินหรือวง K-pop",
+    "language": "th"
+  },
+  {
+    "id": 70,
+    "category": "music",
+    "question": "นักร้องลูกทุ่งหรือหมอลำ",
+    "language": "th"
+  },
+  {
+    "id": 71,
+    "category": "music",
+    "question": "วงดนตรีไทย",
+    "language": "th"
+  },
+  {
+    "id": 72,
+    "category": "music",
+    "question": "เครื่องดนตรีไทย",
+    "language": "th"
+  },
+  {
+    "id": 73,
+    "category": "music",
+    "question": "แอปฟังเพลง",
+    "language": "th"
+  },
+  {
+    "id": 74,
+    "category": "music",
+    "question": "เพลงที่ต้องมีคนร้องในร้านคาราโอเกะ",
+    "language": "th"
+  },
+  {
+    "id": 75,
+    "category": "music",
+    "question": "นักร้องต่างประเทศระดับโลก",
+    "language": "th"
+  },
+  {
+    "id": 76,
+    "category": "music",
+    "question": "ของที่อยู่ในห้องคาราโอเกะ",
+    "language": "th"
+  },
+  {
+    "id": 77,
+    "category": "music",
+    "question": "เพลงที่ร้องตอนเข้าแถวหน้าเสาธง",
+    "language": "th"
+  },
+  {
+    "id": 78,
+    "category": "music",
+    "question": "คำที่มักจะอยู่ในเพลงรัก",
+    "language": "th"
+  },
+  {
+    "id": 79,
+    "category": "music",
+    "question": "ของที่ต้องพกไปดูคอนเสิร์ต",
+    "language": "th"
+  },
+  {
+    "id": 80,
+    "category": "music",
+    "question": "ท่าเต้นหรือเพลงแดนซ์ที่ใคร ๆ ก็เต้นได้",
+    "language": "th"
+  },
+  {
+    "id": 81,
+    "category": "music",
+    "question": "เพลงที่ได้ยินในงานวัดหรืองานแต่ง",
+    "language": "th"
+  },
+  {
+    "id": 82,
+    "category": "daily",
+    "question": "สิ่งของในห้องนอน",
+    "language": "th"
+  },
+  {
+    "id": 83,
+    "category": "daily",
+    "question": "สิ่งที่ทำทันทีหลังตื่นนอน",
+    "language": "th"
+  },
+  {
+    "id": 84,
+    "category": "daily",
+    "question": "ของที่ต้องพกก่อนออกจากบ้าน",
+    "language": "th"
+  },
+  {
+    "id": 85,
+    "category": "daily",
+    "question": "แอปในมือถือที่ใช้ทุกวัน",
+    "language": "th"
+  },
+  {
+    "id": 86,
+    "category": "daily",
+    "question": "งานบ้านที่ไม่อยากทำ",
+    "language": "th"
+  },
+  {
+    "id": 87,
+    "category": "daily",
+    "question": "สิ่งของในห้องน้ำ",
+    "language": "th"
+  },
+  {
+    "id": 88,
+    "category": "daily",
+    "question": "ข้ออ้างตอนมาสาย",
+    "language": "th"
+  },
+  {
+    "id": 89,
+    "category": "daily",
+    "question": "เครื่องใช้ไฟฟ้าในบ้าน",
+    "language": "th"
+  },
+  {
+    "id": 90,
+    "category": "daily",
+    "question": "ของในกระเป๋านักเรียน",
+    "language": "th"
+  },
+  {
+    "id": 91,
+    "category": "daily",
+    "question": "อาชีพในฝันตอนเด็ก",
+    "language": "th"
+  },
+  {
+    "id": 92,
+    "category": "daily",
+    "question": "กีฬายอดนิยม",
+    "language": "th"
+  },
+  {
+    "id": 93,
+    "category": "daily",
+    "question": "สิ่งที่ทำตอนเบื่อ",
+    "language": "th"
+  },
+  {
+    "id": 94,
+    "category": "daily",
+    "question": "ยานพาหนะ",
+    "language": "th"
+  },
+  {
+    "id": 95,
+    "category": "daily",
+    "question": "ของที่ซื้อบ่อยในแอปช้อปปิ้ง",
+    "language": "th"
+  },
+  {
+    "id": 96,
+    "category": "daily",
+    "question": "ของขวัญวันเกิดที่ได้บ่อย",
+    "language": "th"
+  },
+  {
+    "id": 97,
+    "category": "daily",
+    "question": "เทศกาลหรือวันหยุดของไทย",
+    "language": "th"
+  },
+  {
+    "id": 98,
+    "category": "daily",
+    "question": "สิ่งที่ทำก่อนนอน",
+    "language": "th"
+  },
+  {
+    "id": 99,
+    "category": "daily",
+    "question": "สีที่เห็นบ่อยบนรถยนต์",
+    "language": "th"
+  },
+  {
+    "id": 100,
+    "category": "funny",
+    "question": "ข้ออ้างตอนไม่ได้ทำการบ้าน",
+    "language": "th"
+  },
+  {
+    "id": 101,
+    "category": "funny",
+    "question": "คำที่แม่พูดบ่อยที่สุด",
+    "language": "th"
+  },
+  {
+    "id": 102,
+    "category": "funny",
+    "question": "สิ่งที่คนชอบทำตอนนั่งในห้องน้ำนาน ๆ",
+    "language": "th"
+  },
+  {
+    "id": 103,
+    "category": "funny",
+    "question": "คำทักทายจากญาติที่ไม่อยากได้ยิน",
+    "language": "th"
+  },
+  {
+    "id": 104,
+    "category": "funny",
+    "question": "ชื่อเล่นที่คนไทยตั้งบ่อย",
+    "language": "th"
+  },
+  {
+    "id": 105,
+    "category": "funny",
+    "question": "สิ่งที่แอบทำตอนประชุมออนไลน์",
+    "language": "th"
+  },
+  {
+    "id": 106,
+    "category": "funny",
+    "question": "คำแก้ตัวเวลาลืมตอบแชท",
+    "language": "th"
+  },
+  {
+    "id": 107,
+    "category": "funny",
+    "question": "ของที่หายบ่อยที่สุดในบ้าน",
+    "language": "th"
+  },
+  {
+    "id": 108,
+    "category": "funny",
+    "question": "ชื่อหมาหรือแมวที่คนไทยตั้งบ่อย",
+    "language": "th"
+  },
+  {
+    "id": 109,
+    "category": "funny",
+    "question": "สิ่งที่เด็ก ๆ กลัว",
+    "language": "th"
+  },
+  {
+    "id": 110,
+    "category": "funny",
+    "question": "ของที่ซื้อมาแล้วไม่เคยได้ใช้",
+    "language": "th"
+  },
+  {
+    "id": 111,
+    "category": "funny",
+    "question": "สิ่งที่ไม่ควรทำในวันแรกของการทำงาน",
+    "language": "th"
+  },
+  {
+    "id": 112,
+    "category": "funny",
+    "question": "เสียงที่น่ารำคาญที่สุด",
+    "language": "th"
+  },
+  {
+    "id": 113,
+    "category": "funny",
+    "question": "พลังวิเศษที่อยากมี",
+    "language": "th"
+  },
+  {
+    "id": 114,
+    "category": "funny",
+    "question": "สิ่งแรกที่จะทำถ้าถูกลอตเตอรี่รางวัลที่ 1",
+    "language": "th"
+  },
+  {
+    "id": 115,
+    "category": "funny",
+    "question": "สิ่งที่คนชอบโพสต์ลงโซเชียล",
+    "language": "th"
+  },
+  {
+    "id": 116,
+    "category": "funny",
+    "question": "สิ่งที่พูดตอนเมา",
+    "language": "th"
+  }
+]
