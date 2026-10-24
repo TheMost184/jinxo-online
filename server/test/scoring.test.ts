@@ -1,8 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { normalizeAnswer, type Board, type PublicScoringConfig } from '@jinxo/shared';
-import { buildGroups, rank, scoreRound, tierFor } from '../src/game/scoring.js';
-import { buildRevealSteps } from '../src/game/reveal.js';
+import { aliasesFromEdges, rank, scoreRound, tierFor } from '../src/game/scoring.js';
 
 const config: PublicScoringConfig = {
   tiers: [
@@ -114,22 +113,29 @@ test('rank: คะแนนเท่ากันได้อันดับเ�
   assert.deepEqual(r.map((x) => [x.item.n, x.rank]), [['b', 1], ['a', 2], ['c', 2], ['d', 4]]);
 });
 
-test('reveal steps: กลุ่มที่ตรงกันเปิดทีละกลุ่ม แล้วตามด้วยคำที่ไม่ตรงใคร', () => {
+test('กันปั๊มคะแนน: คนเดียวมี 2 ช่องในกลุ่มเดียวกัน นับแต้มช่องเดียวและไม่นับโบนัส', () => {
+  // A มีทั้ง "หมู" และ "สุกร" ในหัวข้อ 0 แล้ว Host รวมสองคำนี้เข้ากลุ่มเดียวกัน
   const boards = new Map<string, Board>([
-    ['A', board([['a', 0], ['b', 0], ['u1', 0], ['d', 1], null, null, null, null, null])],
-    ['B', board([['a', 0], ['b', 0], ['u2', 0], ['d', 1], null, null, null, null, null])],
-    ['C', board([['a', 0], ['u3', 0], null, ['e', 1], null, null, null, null, null])],
+    ['A', board([['หมู', 0], ['สุกร', 0], ['x', 0], null, null, null, null, null, null])],
+    ['B', board([['หมู', 0], ['y', 0], ['z', 0], null, null, null, null, null, null])],
   ]);
-  const steps = buildRevealSteps(buildGroups(boards), 3);
-  assert.deepEqual(
-    steps.map((s) => [s.topicIndex, s.kind, s.groupIds.length]),
-    [
-      [0, 'group', 1], // b (2 คน) ก่อน
-      [0, 'group', 1], // a (3 คน) เป็นไคลแม็กซ์
-      [0, 'unmatched', 3],
-      [1, 'group', 1],
-      [1, 'unmatched', 1],
-    ],
-  );
-  assert.equal(steps[0].groupIds[0], '0|b');
+  const aliases = aliasesFromEdges([['0|สุกร', '0|หมู']]);
+  const a = scoreRound(boards, aliases, config).get('A')!;
+  assert.equal(a.cells[0]!.points, 2); // ช่องแรกได้ JinxO
+  assert.equal(a.cells[1]!.points, 0);
+  assert.equal(a.cells[1]!.duplicate, true);
+  assert.equal(a.basePoints, 2);
+  assert.equal(a.jinxoCount, 1);
+  // กลุ่มยังนับเป็น 2 คน (ไม่ใช่ 3 ช่อง)
+  assert.equal(a.cells[0]!.playerCount, 2);
+});
+
+test('union-find: id กลุ่มคงที่ไม่ขึ้นกับลำดับการอนุมัติ', () => {
+  const x = aliasesFromEdges([['0|ค', '0|ข'], ['0|ข', '0|ก']]);
+  const y = aliasesFromEdges([['0|ก', '0|ข'], ['0|ค', '0|ก']]);
+  for (const m of [x, y]) {
+    assert.equal(m.get('0|ข'), '0|ก');
+    assert.equal(m.get('0|ค'), '0|ก');
+    assert.equal(m.has('0|ก'), false);
+  }
 });

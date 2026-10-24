@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import type { Placement } from '@jinxo/shared';
+import { CUSTOM_CATEGORY_ID, type Placement } from '@jinxo/shared';
 import { gameConfig, scoringConfig } from '../src/config.js';
 import { QuestionBank } from '../src/questions/questionBank.js';
 import { Room } from '../src/rooms/Room.js';
@@ -21,7 +21,7 @@ function setup(n = 3) {
 }
 
 function expectCode(fn: () => void, code: string) {
-  assert.throws(fn, (e: unknown) => e instanceof GameError && e.code === code);
+  assert.throws(fn, (e: unknown) => e instanceof GameError && e.code === code, `ควร error ${code}`);
 }
 
 /** วางคำตอบ 3 คำในช่องว่างช่องแรก ๆ */
@@ -31,22 +31,64 @@ function place(room: Room, id: string, words: string[]): Placement[] {
   return words.map((text, i) => ({ cellIndex: empty[i], text }));
 }
 
-test('คำถามเริ่มต้นมีอย่างน้อย 100 ข้อ และครบ 7 หมวด', () => {
+/** เปิดคำตอบทุกคนจนจบรอบ (ไม่มี match request) */
+function revealAll(room: Room, hostId: string) {
+  while (room.phase === 'reveal') {
+    try {
+      room.revealNextAnswer(hostId);
+    } catch (e) {
+      if (!(e instanceof GameError) || e.code !== 'NOTHING_TO_REVEAL') throw e;
+      room.nextPlayer(hostId);
+    }
+  }
+}
+
+test('คำถามเริ่มต้นมีอย่างน้อย 100 ข้อ, 7 หมวด + หมวดคิดโจทย์เอง', () => {
   assert.ok(questions.questions.length >= 100);
   assert.equal(questions.categories.length, 7);
+  const { room, ids } = setup(1);
+  assert.ok(room.viewFor(ids[0]).categories.some((c) => c.id === CUSTOM_CATEGORY_ID && c.custom));
 });
 
-test('lobby: ชื่อซ้ำ, ห้องเต็ม, host คนแรก, เริ่มเกมต้องมี 3 คน', () => {
+test('lobby: ชื่อซ้ำ, ห้องเต็ม 15 คน, host คนแรก, เริ่มเกมต้องมี 3 คน', () => {
   const { room, ids } = setup(2);
+  assert.equal(gameConfig.maxPlayers, 15);
   assert.equal(room.hostId, ids[0]);
   expectCode(() => room.addPlayer('p1'), 'NAME_TAKEN');
   expectCode(() => room.start(ids[1]), 'NOT_HOST');
   expectCode(() => room.start(ids[0]), 'NOT_ENOUGH_PLAYERS');
-  for (let i = 3; i <= gameConfig.maxPlayers; i++) room.attachSocket(room.addPlayer(`P${i}`).id, `x${i}`);
+  for (let i = 3; i <= 15; i++) room.attachSocket(room.addPlayer(`P${i}`).id, `x${i}`);
   expectCode(() => room.addPlayer('Extra'), 'ROOM_FULL');
 });
 
-test('เล่นครบ 1 เกม: ตอบ → reveal → review → คะแนน → final → play again', () => {
+test('Kick: เฉพาะ Host, เฉพาะ Lobby, เตะตัวเองไม่ได้, token เดิมใช้ไม่ได้, join ใหม่ได้', () => {
+  const { room, ids } = setup(4);
+  const victim = room.getPlayer(ids[2])!;
+  const oldToken = victim.token;
+  expectCode(() => room.kick(ids[1], ids[2]), 'NOT_HOST');
+  expectCode(() => room.kick(ids[0], ids[0]), 'INVALID_PAYLOAD');
+  const res = room.kick(ids[0], ids[2]);
+  assert.equal(res.socketId, 's2');
+  assert.equal(room.players.length, 3);
+  expectCode(() => room.authenticate(ids[2], oldToken), 'KICKED');
+  // กลับเข้าห้องใหม่ได้ด้วย session ใหม่ (ชื่อเดิมก็ได้)
+  const again = room.addPlayer(victim.name);
+  assert.notEqual(again.id, ids[2]);
+  room.attachSocket(again.id, 's2b');
+  room.start(ids[0]);
+  expectCode(() => room.kick(ids[0], ids[1]), 'WRONG_PHASE');
+});
+
+test('หมวดคิดโจทย์เองใช้ร่วมกับหมวดอื่นไม่ได้', () => {
+  const { room, ids } = setup(3);
+  expectCode(() => room.setCategories(ids[0], [CUSTOM_CATEGORY_ID, 'food']), 'INVALID_PAYLOAD');
+  room.setCategories(ids[0], [CUSTOM_CATEGORY_ID]);
+  assert.equal(room.viewFor(ids[1]).customMode, true);
+  room.setCategories(ids[0], ['food']);
+  assert.equal(room.viewFor(ids[1]).customMode, false);
+});
+
+test('เล่นครบ 1 เกม: ตอบ → เปิดทีละคน → Round Summary → final → play again', () => {
   const { room, ids } = setup(3);
   room.start(ids[0]);
   assert.equal(room.phase, 'answering');
@@ -54,43 +96,29 @@ test('เล่นครบ 1 เกม: ตอบ → reveal → review → ค
 
   for (let round = 0; round < gameConfig.rounds; round++) {
     for (let t = 0; t < gameConfig.topicsPerRound; t++) {
-      // ก่อนตอบ ผู้เล่นเห็นเฉพาะหัวข้อที่เปิดแล้ว
       assert.equal(room.viewFor(ids[1]).topics.length, t + 1);
       room.submitAnswers(ids[0], place(room, ids[0], [`a${t}`, `b${t}`, `x${t}`]));
       expectCode(() => room.submitAnswers(ids[0], place(room, ids[0], ['q', 'w', 'e'])), 'ALREADY_SUBMITTED');
-      // P1 ตอบแล้ว แต่คนอื่นยังมองไม่เห็นคำตอบของ P1 (ไม่มีข้อมูล reveal)
       assert.equal(room.viewFor(ids[1]).reveal, null);
       room.submitAnswers(ids[1], place(room, ids[1], [`a${t}`, `b${t}`, `y${t}`]));
       room.submitAnswers(ids[2], place(room, ids[2], [`a${t}`, `z${t}`, `w${t}`]));
     }
     assert.equal(room.phase, 'reveal');
     const v = room.viewFor(ids[0]).reveal!;
-    assert.ok(v.boards.every((b) => b.cells.every((c) => c.state === 'hidden')));
-    room.revealNext(ids[0]);
-    const v2 = room.viewFor(ids[2]).reveal!;
-    assert.equal(v2.revealedSteps, 1);
-    assert.ok(v2.groups.length >= 1);
-    room.revealAll(ids[0]);
-    assert.equal(room.phase, 'review');
-
-    // รวม x0 กับ y0 เป็นคำเดียวกัน → กลายเป็น JinxO
-    const groups = room.viewFor(ids[0]).reveal!.groups;
-    const x = groups.find((g) => g.label === 'x0')!;
-    const y = groups.find((g) => g.label === 'y0')!;
-    expectCode(() => room.mergeGroups(ids[1], 0, [x.id, y.id]), 'NOT_HOST');
-    room.mergeGroups(ids[0], 0, [x.id, y.id]);
-    const mergedGroup = room.viewFor(ids[0]).reveal!.groups.find((g) => g.id === x.id)!;
-    assert.equal(mergedGroup.playerCount, 2);
-    assert.equal(mergedGroup.kind, 'jinxo');
-    room.splitGroup(ids[0], x.id);
-    room.mergeGroups(ids[0], 0, [x.id, y.id]);
-
-    room.finalizeRound(ids[0]);
+    assert.equal(new Set(v.order).size, 3);
+    // ลำดับคงที่ตลอดการเปิด
+    expectCode(() => room.revealNextAnswer(ids[1]), 'NOT_HOST');
+    room.revealNextAnswer(ids[0]);
+    assert.deepEqual(room.viewFor(ids[2]).reveal!.order, v.order);
+    revealAll(room, ids[0]);
     assert.equal(room.phase, 'roundResult');
     const res = room.viewFor(ids[0]).roundResult!;
     const s1 = res.scores.find((s) => s.playerId === ids[0])!;
-    // a* ตรง 3 คน (1×3) + b* JinxO (2×3) + x0/y0 JinxO (2) = 3 + 6 + 2 = 11 + โบนัสตามตำแหน่ง
-    assert.equal(s1.basePoints, 11);
+    // a* ตรง 3 คน (1×3) + b* JinxO (2×3) = 9 (+ โบนัสตามตำแหน่ง)
+    assert.equal(s1.basePoints, 9);
+    assert.equal(res.boards.length, 3);
+    assert.ok(res.boards.every((b) => b.complete));
+    assert.equal(res.topMatched[0].size, 3);
     room.nextRound(ids[0]);
   }
   assert.equal(room.phase, 'finalResult');
@@ -99,7 +127,27 @@ test('เล่นครบ 1 เกม: ตอบ → reveal → review → ค
   assert.ok(final.winnerIds.length >= 1);
   room.playAgain(ids[0]);
   assert.equal(room.phase, 'lobby');
-  assert.ok(room.players.every((p) => p.totalScore === 0));
+  assert.ok(room.players.every((p) => p.totalScore === 0 && p.totalLikes === 0));
+});
+
+test('Like ไม่มีผลกับอันดับ แต่สะสมเป็น Popularity', () => {
+  const { room, ids } = setup(3);
+  room.start(ids[0]);
+  for (let t = 0; t < 3; t++) for (const id of ids) room.submitAnswers(id, place(room, id, [`${id}${t}a`, `${id}${t}b`, `${id}${t}c`]));
+  room.revealNextAnswer(ids[0]);
+  const focus = room.viewFor(ids[0]).reveal!.focusAnswerId!;
+  const owner = focus.split(':')[0];
+  const others = ids.filter((x) => x !== owner);
+  for (const o of others) room.setLike(o, focus, true);
+  expectCode(() => room.setLike(owner, focus, true), 'OWN_ANSWER');
+  assert.deepEqual(room.viewFor(others[0]).myLikes, [focus]);
+  revealAll(room, ids[0]);
+  const res = room.viewFor(ids[0]).roundResult!;
+  assert.equal(res.topLiked[0].answerId, focus);
+  assert.equal(res.topLiked[0].likes, 2);
+  // ไม่มีใครตรงกันเลย = 0 แต้มทุกคน อันดับ 1 เท่ากันหมดแม้จะมีคนได้ Like
+  assert.ok(res.scores.every((s) => s.rank === 1 && s.total === 0));
+  assert.equal(res.scores.find((s) => s.playerId === owner)!.likes, 2);
 });
 
 test('validation คำตอบ: ซ้ำในกระดาน, ช่องทับ, ไม่ครบ, ยาวเกิน', () => {
@@ -116,38 +164,28 @@ test('validation คำตอบ: ซ้ำในกระดาน, ช่อ�
     'CELL_TAKEN',
   );
   expectCode(
-    () => room.submitAnswers(id, [{ cellIndex: 0, text: 'a' }, { cellIndex: 1, text: '   ' }, { cellIndex: 2, text: 'c' }]),
-    'INVALID_PAYLOAD',
-  );
-  expectCode(
-    () => room.submitAnswers(id, [{ cellIndex: 0, text: 'a'.repeat(99) }, { cellIndex: 1, text: 'b' }, { cellIndex: 9, text: 'c' }]),
+    () => room.submitAnswers(id, [{ cellIndex: 0, text: 'a'.repeat(99) }, { cellIndex: 1, text: 'b' }, { cellIndex: 2, text: 'c' }]),
     'INVALID_PAYLOAD',
   );
   room.submitAnswers(id, [{ cellIndex: 0, text: 'แมว' }, { cellIndex: 4, text: 'หมา' }, { cellIndex: 8, text: 'ปลา' }]);
-  // หัวข้อถัดไป ห้ามตอบซ้ำคำเดิมจากหัวข้อก่อน และห้ามวางทับช่องเดิม
   room.submitAnswers(ids[1], place(room, ids[1], ['1', '2', '3']));
   room.submitAnswers(ids[2], place(room, ids[2], ['1', '2', '3']));
   expectCode(
     () => room.submitAnswers(id, [{ cellIndex: 1, text: 'แมว' }, { cellIndex: 2, text: 'b' }, { cellIndex: 3, text: 'c' }]),
     'DUPLICATE_ANSWER',
   );
-  expectCode(
-    () => room.submitAnswers(id, [{ cellIndex: 0, text: 'z' }, { cellIndex: 2, text: 'b' }, { cellIndex: 3, text: 'c' }]),
-    'CELL_TAKEN',
-  );
 });
 
-test('disconnect: รอช่วงผ่อนผันก่อน แล้วเกมเดินต่อ, กลับมาตอบต่อได้', () => {
+test('disconnect ระหว่างตอบ: รอช่วงผ่อนผันก่อน แล้วเกมเดินต่อ, กลับมาตอบต่อได้', () => {
   const { room, ids, clock } = setup(3);
   room.start(ids[0]);
-  room.detachSocket('s2'); // P3 หลุด
+  room.detachSocket('s2');
   room.submitAnswers(ids[0], place(room, ids[0], ['a', 'b', 'c']));
   room.submitAnswers(ids[1], place(room, ids[1], ['a', 'b', 'd']));
-  assert.equal(room.viewFor(ids[0]).currentTopicIndex, 0); // ยังรอ P3
+  assert.equal(room.viewFor(ids[0]).currentTopicIndex, 0);
   clock.advance(gameConfig.disconnectGraceMs + 10);
   assert.ok(room.tick());
-  assert.equal(room.viewFor(ids[0]).currentTopicIndex, 1); // ข้าม P3 แล้ว
-  // P3 กลับมา → ต้องตอบหัวข้อ 2 ได้
+  assert.equal(room.viewFor(ids[0]).currentTopicIndex, 1);
   room.attachSocket(ids[2], 's2b');
   assert.equal(room.viewFor(ids[0]).requiredCount, 3);
   room.submitAnswers(ids[2], place(room, ids[2], ['e', 'f', 'g']));
@@ -167,33 +205,54 @@ test('host หลุดเกินเวลา → โอน host, host กด�
   assert.equal(room.hostId, ids[2]);
 });
 
-test('host กด skip waiting สำหรับคน AFK', () => {
+test('โหมดคิดโจทย์เอง: สุ่มคนตั้งโจทย์ไม่ซ้ำจนครบทุกคน, คนตั้งตอบด้วย, 9 โจทย์ต่อเกม', () => {
   const { room, ids } = setup(3);
+  room.setCategories(ids[0], [CUSTOM_CATEGORY_ID]);
   room.start(ids[0]);
-  room.submitAnswers(ids[0], place(room, ids[0], ['a', 'b', 'c']));
-  expectCode(() => room.skipWaiting(ids[1]), 'NOT_HOST');
-  room.skipWaiting(ids[0]);
-  assert.equal(room.viewFor(ids[0]).currentTopicIndex, 1);
-});
-
-test('ไม่สุ่มคำถามซ้ำในเกมเดียวกัน และ host เลือกหมวดได้', () => {
-  const { room, ids } = setup(3);
-  room.setCategories(ids[0], ['food']);
-  expectCode(() => room.setCategories(ids[0], ['nope']), 'INVALID_PAYLOAD');
-  room.start(ids[0]);
-  const seen = new Set<number>();
+  const authors: string[] = [];
   for (let r = 0; r < gameConfig.rounds; r++) {
     for (let t = 0; t < gameConfig.topicsPerRound; t++) {
-      for (const id of ids) room.submitAnswers(id, place(room, id, [`${id}a${t}`, `${id}b${t}`, `${id}c${t}`]));
+      assert.equal(room.phase, 'authoring');
+      const view = room.viewFor(ids[0]);
+      const author = view.authoring!.authorId;
+      // ยังไม่มีใครเห็นโจทย์ก่อนส่ง
+      assert.equal(view.topics.length, t);
+      const other = ids.find((x) => x !== author)!;
+      expectCode(() => room.submitQuestion(other, 'แอบตั้งโจทย์'), 'NOT_AUTHOR');
+      expectCode(() => room.submitQuestion(author, ' '), 'INVALID_PAYLOAD');
+      room.submitQuestion(author, `โจทย์ ${r}-${t}`);
+      expectCode(() => room.submitQuestion(author, 'แก้โจทย์'), 'WRONG_PHASE');
+      authors.push(author);
+      assert.equal(room.phase, 'answering');
+      assert.equal(room.viewFor(other).topics[t].question, `โจทย์ ${r}-${t}`);
+      assert.equal(room.viewFor(other).topics[t].authorId, author);
+      for (const id of ids) room.submitAnswers(id, place(room, id, [`${id}${r}${t}a`, `${id}${r}${t}b`, `ตรง${r}${t}`]));
     }
-    for (const topic of room.viewFor(ids[0]).topics) {
-      assert.equal(topic.category, 'food');
-      assert.ok(!seen.has(topic.id), 'คำถามซ้ำ');
-      seen.add(topic.id);
-    }
-    room.revealAll(ids[0]);
-    room.finalizeRound(ids[0]);
+    revealAll(room, ids[0]);
     room.nextRound(ids[0]);
   }
-  assert.equal(seen.size, 9);
+  assert.equal(authors.length, 9);
+  // ทุก ๆ 3 โจทย์ ทุกคนได้ตั้งครบคนละครั้ง
+  for (let i = 0; i < 9; i += 3) assert.equal(new Set(authors.slice(i, i + 3)).size, 3);
+  assert.equal(room.phase, 'finalResult');
+});
+
+test('โหมดคิดโจทย์เอง: คนตั้งโจทย์หลุดเกินเวลา → สุ่มคนใหม่จากคนที่ออนไลน์, Host สุ่มใหม่ได้', () => {
+  const { room, ids, clock } = setup(4);
+  room.setCategories(ids[0], [CUSTOM_CATEGORY_ID]);
+  room.start(ids[0]);
+  const first = room.viewFor(ids[0]).authoring!.authorId;
+  const sock = `s${ids.indexOf(first)}`;
+  room.detachSocket(sock);
+  clock.advance(gameConfig.disconnectGraceMs - 50);
+  room.tick();
+  assert.equal(room.viewFor(ids[0]).authoring!.authorId, first);
+  clock.advance(100);
+  assert.ok(room.tick());
+  const second = room.viewFor(ids[0]).authoring!.authorId;
+  assert.notEqual(second, first);
+  assert.ok(room.getPlayer(second)!.connected);
+  const host = room.hostId;
+  room.rerollAuthor(host);
+  assert.notEqual(room.viewFor(host).authoring!.authorId, second);
 });

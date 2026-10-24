@@ -32,6 +32,8 @@ export function createJinxoServer() {
     pingInterval: 10_000,
     pingTimeout: 8_000,
     maxHttpBufferSize: 16_000,
+    // state ห้อง 15 คนเป็น JSON ซ้ำ ๆ — บีบอัดลดขนาดได้มาก
+    perMessageDeflate: { threshold: 1024 },
   });
   registerHandlers(io, rooms);
   return { app, httpServer, io, rooms, questions, hasClient: existsSync(resolve(clientDist, 'index.html')) };

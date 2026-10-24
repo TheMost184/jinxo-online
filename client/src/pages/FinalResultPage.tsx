@@ -16,6 +16,7 @@ function FinalResult({ room, final }: { room: RoomView; final: FinalResultView }
   const [busy, setBusy] = useState(false);
   const winners = final.standings.filter((s) => final.winnerIds.includes(s.playerId));
   const rounds = room.config.game.rounds;
+  const popular = final.standings.filter((s) => final.popularIds.includes(s.playerId));
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col items-center gap-6 px-4 pb-16">
@@ -41,6 +42,17 @@ function FinalResult({ room, final }: { room: RoomView; final: FinalResultView }
         </div>
       </motion.div>
 
+      {popular.length > 0 && (
+        <div className="slab flex w-full max-w-md items-center gap-3 !bg-jinx-soft px-4 py-3">
+          <span className="text-3xl">💖</span>
+          <div className="min-w-0 flex-1">
+            <p className="text-[14px] text-ink-soft">ขวัญใจมหาชนทั้งเกม</p>
+            <p className="truncate font-display text-xl">{popular.map((p) => p.name).join(', ')}</p>
+          </div>
+          <span className="font-display text-xl">♥ {popular[0].totalLikes}</span>
+        </div>
+      )}
+
       <div className="slab w-full overflow-x-auto p-2 sm:p-4">
         <table className="w-full min-w-[420px] text-left">
           <thead>
@@ -53,6 +65,7 @@ function FinalResult({ room, final }: { room: RoomView; final: FinalResultView }
                 </th>
               ))}
               <th className="px-2 py-2 text-right font-normal">JinxO</th>
+              <th className="px-2 py-2 text-right font-normal" title="Like ที่ได้รับ ไม่นับเป็นคะแนน">♥</th>
               <th className="px-2 py-2 text-right font-normal">รวม</th>
             </tr>
           </thead>
@@ -72,6 +85,7 @@ function FinalResult({ room, final }: { room: RoomView; final: FinalResultView }
                   </td>
                 ))}
                 <td className="px-2 py-2.5 text-right">{s.jinxoCount}</td>
+                <td className="px-2 py-2.5 text-right">{s.totalLikes}</td>
                 <td className="px-2 py-2.5 text-right font-display text-2xl">{s.total}</td>
               </tr>
             ))}

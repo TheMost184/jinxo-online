@@ -82,6 +82,11 @@ export interface CellScore {
   playerCount: number;
   kind: MatchKind;
   points: number;
+  /**
+   * ผู้เล่นคนนี้มีช่องอื่นในกลุ่มเดียวกันที่ถูกนับไปแล้ว (เกิดได้จากการจับคู่คำพ้องเท่านั้น)
+   * → ช่องนี้ 0 แต้ม และไม่นับเป็นช่องที่ตรงกันสำหรับโบนัสแนว กันการปั๊มคะแนน
+   */
+  duplicate: boolean;
 }
 
 export interface BoardScore {
@@ -101,7 +106,7 @@ export function indexGroups(groups: AnswerGroup[]): Map<string, AnswerGroup> {
 }
 
 export function cellQualifiesForBonus(cell: CellScore | null, config: PublicScoringConfig): boolean {
-  if (!cell) return false;
+  if (!cell || cell.duplicate) return false;
   return config.lineBonus.condition === 'jinxo' ? cell.kind === 'jinxo' : cell.playerCount >= 2;
 }
 
@@ -111,12 +116,23 @@ export function scoreBoard(
   byCell: Map<string, AnswerGroup>,
   config: PublicScoringConfig,
 ): BoardScore {
+  // ช่องแรก (cellIndex น้อยสุด) ของผู้เล่นในแต่ละกลุ่มเท่านั้นที่ได้แต้ม — ผลเหมือนเดิมทุกครั้ง (deterministic)
+  const counted = new Set<string>();
   const cells: (CellScore | null)[] = board.map((cell, cellIndex) => {
     if (!cell) return null;
     const g = byCell.get(`${playerId}#${cellIndex}`);
     if (!g) return null;
+    const duplicate = counted.has(g.id);
+    counted.add(g.id);
     const { points, kind } = tierFor(g.playerIds.length, config);
-    return { cellIndex, groupId: g.id, playerCount: g.playerIds.length, kind, points };
+    return {
+      cellIndex,
+      groupId: g.id,
+      playerCount: g.playerIds.length,
+      kind,
+      points: duplicate ? 0 : points,
+      duplicate,
+    };
   });
 
   const basePoints = cells.reduce((s, c) => s + (c?.points ?? 0), 0);
@@ -137,8 +153,8 @@ export function scoreBoard(
     basePoints,
     bonusPoints,
     bonusLines,
-    jinxoCount: cells.filter((c) => c?.kind === 'jinxo').length,
-    matchCount: cells.filter((c) => c && c.playerCount >= 2).length,
+    jinxoCount: cells.filter((c) => c?.kind === 'jinxo' && !c.duplicate).length,
+    matchCount: cells.filter((c) => c && !c.duplicate && c.playerCount >= 2).length,
   };
 }
 
@@ -166,4 +182,40 @@ export function rank<T>(items: T[], scoreOf: (t: T) => number): { item: T; rank:
     }
     return { item, rank: lastRank };
   });
+}
+
+/**
+ * รวม base key เป็นกลุ่มตาม "เส้นเชื่อม" ที่ Host อนุมัติ (union-find)
+ * คืน AliasMap: base key → id ของกลุ่ม (base key ที่น้อยที่สุดในกลุ่ม เพื่อให้ id คงที่ไม่ขึ้นกับลำดับการอนุมัติ)
+ */
+export function aliasesFromEdges(edges: Iterable<readonly [BaseKey, BaseKey]>): Map<BaseKey, string> {
+  const parent = new Map<BaseKey, BaseKey>();
+  const find = (k: BaseKey): BaseKey => {
+    let root = k;
+    while (parent.has(root) && parent.get(root) !== root) root = parent.get(root)!;
+    // path compression
+    let cur = k;
+    while (parent.has(cur) && parent.get(cur) !== root) {
+      const next = parent.get(cur)!;
+      parent.set(cur, root);
+      cur = next;
+    }
+    return root;
+  };
+  for (const [a, b] of edges) {
+    if (!parent.has(a)) parent.set(a, a);
+    if (!parent.has(b)) parent.set(b, b);
+    const ra = find(a);
+    const rb = find(b);
+    if (ra === rb) continue;
+    // root = key ที่น้อยกว่า → id กลุ่มคงที่
+    if (ra < rb) parent.set(rb, ra);
+    else parent.set(ra, rb);
+  }
+  const out = new Map<BaseKey, string>();
+  for (const k of parent.keys()) {
+    const r = find(k);
+    if (r !== k) out.set(k, r);
+  }
+  return out;
 }

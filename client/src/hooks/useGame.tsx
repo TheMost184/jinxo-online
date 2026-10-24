@@ -6,6 +6,8 @@ import type { ConnectionStatus, Toast } from '../types';
 
 interface GameContextValue {
   room: RoomView | null;
+  /** state ล่าสุดที่เคยมี — ให้หน้าที่กำลังเล่น animation ออก (เช่นตอนถูกเตะ/ออกจากห้อง) ยัง render ได้ */
+  lastRoom: RoomView | null;
   connection: ConnectionStatus;
   /** กำลังพยายามกลับเข้าห้องเดิมหลังรีเฟรช */
   restoring: boolean;
@@ -20,11 +22,15 @@ interface GameContextValue {
     startGame: () => Promise<boolean>;
     submitAnswers: (placements: Placement[]) => Promise<boolean>;
     skipWaiting: () => Promise<boolean>;
-    revealNext: () => Promise<boolean>;
-    revealAll: () => Promise<boolean>;
-    mergeGroups: (topicIndex: number, groupIds: string[]) => Promise<boolean>;
-    splitGroup: (groupId: string) => Promise<boolean>;
-    finalizeRound: () => Promise<boolean>;
+    kickPlayer: (playerId: string) => Promise<boolean>;
+    submitQuestion: (question: string) => Promise<boolean>;
+    rerollAuthor: () => Promise<boolean>;
+    revealNextAnswer: () => Promise<boolean>;
+    nextPlayer: () => Promise<boolean>;
+    requestMatch: (targetAnswerId: string, cellIndex: number) => Promise<boolean>;
+    decideMatch: (requestId: string, approve: boolean) => Promise<boolean>;
+    undoMatch: (requestId: string) => Promise<boolean>;
+    setLike: (answerId: string, like: boolean) => Promise<boolean>;
     nextRound: () => Promise<boolean>;
     playAgain: () => Promise<boolean>;
   };
@@ -62,6 +68,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       } catch (e) {
         const err = e as RequestError;
         if (err.code !== 'OFFLINE' && err.code !== 'TIMEOUT') {
+          // รวมถึงกรณีถูกเตะ (KICKED) — token เดิมใช้ไม่ได้แล้ว
           clearSession();
           setRoom(null);
           toast('warn', err.message);
@@ -81,12 +88,19 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const onConnectError = () => setConnection('offline');
     const onState = (s: RoomView) => setRoom(s);
     const onNotice = (n: { kind: 'info' | 'warn'; message: string }) => toast(n.kind, n.message);
+    const onKicked = (n: { kind: 'info' | 'warn'; message: string }) => {
+      clearSession();
+      setRoom(null);
+      history.replaceState(null, '', '/');
+      toast('error', n.message);
+    };
 
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
     socket.on('connect_error', onConnectError);
     socket.on('room:state', onState);
     socket.on('room:notice', onNotice);
+    socket.on('room:kicked', onKicked);
     if (socket.connected) onConnect();
     return () => {
       socket.off('connect', onConnect);
@@ -94,6 +108,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       socket.off('connect_error', onConnectError);
       socket.off('room:state', onState);
       socket.off('room:notice', onNotice);
+      socket.off('room:kicked', onKicked);
     };
   }, [toast]);
 
@@ -106,7 +121,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       } catch (e) {
         const err = e as RequestError;
         toast('error', err.message || 'เกิดข้อผิดพลาด');
-        if (err.code === 'NOT_IN_ROOM' || err.code === 'SESSION_INVALID') {
+        if (err.code === 'NOT_IN_ROOM' || err.code === 'SESSION_INVALID' || err.code === 'KICKED') {
           clearSession();
           setRoom(null);
         }
@@ -144,19 +159,26 @@ export function GameProvider({ children }: { children: ReactNode }) {
       startGame: () => run(() => request('game:start')),
       submitAnswers: (placements) => run(() => request('answer:submit', { placements })),
       skipWaiting: () => run(() => request('host:skipWaiting')),
-      revealNext: () => run(() => request('reveal:next')),
-      revealAll: () => run(() => request('reveal:all')),
-      mergeGroups: (topicIndex, groupIds) => run(() => request('review:merge', { topicIndex, groupIds })),
-      splitGroup: (groupId) => run(() => request('review:split', { groupId })),
-      finalizeRound: () => run(() => request('round:finalize')),
+      kickPlayer: (playerId) => run(() => request('lobby:kick', { playerId })),
+      submitQuestion: (question) => run(() => request('question:submit', { question })),
+      rerollAuthor: () => run(() => request('host:rerollAuthor')),
+      revealNextAnswer: () => run(() => request('reveal:nextAnswer')),
+      nextPlayer: () => run(() => request('reveal:nextPlayer')),
+      requestMatch: (targetAnswerId, cellIndex) => run(() => request('match:request', { targetAnswerId, cellIndex })),
+      decideMatch: (requestId, approve) => run(() => request('match:decide', { requestId, approve })),
+      undoMatch: (requestId) => run(() => request('match:undo', { requestId })),
+      setLike: (answerId, like) => run(() => request('answer:like', { answerId, like })),
       nextRound: () => run(() => request('round:next')),
       playAgain: () => run(() => request('game:playAgain')),
     }),
     [run],
   );
 
+  const lastRoom = useRef<RoomView | null>(null);
+  if (room) lastRoom.current = room;
+
   const value = useMemo(
-    () => ({ room, connection, restoring, toasts, toast, dismissToast, actions }),
+    () => ({ room, lastRoom: lastRoom.current, connection, restoring, toasts, toast, dismissToast, actions }),
     [room, connection, restoring, toasts, toast, dismissToast, actions],
   );
   return <GameContext.Provider value={value}>{children}</GameContext.Provider>;
@@ -170,7 +192,8 @@ export function useGame(): GameContextValue {
 
 /** state ของห้อง (ใช้ในหน้าที่แน่ใจว่าอยู่ในห้องแล้ว) */
 export function useRoom(): RoomView {
-  const { room } = useGame();
-  if (!room) throw new Error('ยังไม่ได้อยู่ในห้อง');
-  return room;
+  const { room, lastRoom } = useGame();
+  const r = room ?? lastRoom;
+  if (!r) throw new Error('ยังไม่ได้อยู่ในห้อง');
+  return r;
 }

@@ -1,39 +1,25 @@
-import { randomBytes, randomUUID } from 'node:crypto';
+import { randomBytes, randomInt, randomUUID } from 'node:crypto';
 import {
   BOARD_SIZE,
-  LINES,
+  CUSTOM_CATEGORY_ID,
   cleanAnswer,
   normalizeAnswer,
-  type AnswerGroupView,
   type Board,
+  type CategoryInfo,
   type FinalResultView,
   type Notice,
   type Phase,
   type Placement,
   type PlayerRoundScore,
   type PlayerView,
-  type RevealBoardView,
-  type RevealCell,
   type RevealView,
   type RoomView,
   type RoundResultView,
   type Topic,
 } from '@jinxo/shared';
 import { publicGameConfig, type GameConfig, type ScoringConfig } from '../config.js';
-import { buildRevealSteps, type RevealStep } from '../game/reveal.js';
-import {
-  baseKeyOf,
-  buildGroups,
-  canonicalOf,
-  indexGroups,
-  lineBonusValue,
-  rank,
-  scoreBoard,
-  scoreRound,
-  tierFor,
-  type AnswerGroup,
-  type BaseKey,
-} from '../game/scoring.js';
+import { RevealEngine } from '../game/reveal.js';
+import { rank } from '../game/scoring.js';
 import type { QuestionBank } from '../questions/questionBank.js';
 import { GameError } from '../utils/errors.js';
 
@@ -51,10 +37,13 @@ export interface PlayerState {
   totalScore: number;
   roundTotals: number[];
   jinxoTotal: number;
+  /** Popularity Score — แยกจากคะแนนแข่งขันเสมอ */
+  totalLikes: number;
 }
 
 interface RoundState {
   index: number;
+  /** โหมดปกติ: ครบตั้งแต่เริ่มรอบ / โหมดคิดโจทย์เอง: เพิ่มทีละข้อเมื่อมีคนตั้งโจทย์ */
   topics: Topic[];
   currentTopic: number;
   /** ผู้เล่นที่อยู่ในรอบนี้ตั้งแต่เริ่ม */
@@ -62,10 +51,13 @@ interface RoundState {
   boards: Map<string, Board>;
   submitted: Set<string>;
   skipped: Set<string>;
-  aliases: Map<BaseKey, string>;
-  steps: RevealStep[];
-  revealed: number;
+  reveal: RevealEngine | null;
   result: RoundResultView | null;
+}
+
+interface AuthoringState {
+  authorId: string;
+  topicIndex: number;
 }
 
 export interface RoomDeps {
@@ -74,11 +66,28 @@ export interface RoomDeps {
   questions: QuestionBank;
 }
 
-const PLAYER_COLORS = 8;
+const PLAYER_COLORS = 16;
+
+export const CUSTOM_CATEGORY: CategoryInfo = {
+  id: CUSTOM_CATEGORY_ID,
+  label: 'คิดโจทย์เอง',
+  emoji: '✍️',
+  count: 0,
+  custom: true,
+};
+
+function shuffle<T>(arr: readonly T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = randomInt(i + 1);
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
 
 /**
  * Game state machine ของห้องหนึ่งห้อง — ไม่รู้จัก socket
- * ทุก action ตรวจสิทธิ์ + phase + ข้อมูลเสมอ และโยน GameError ถ้าไม่ผ่าน
+ * ทุก action ตรวจ ผู้เล่น → สิทธิ์ → phase → ข้อมูล และโยน GameError ถ้าไม่ผ่าน
  * ชั้น socket เป็นคน broadcast state หลัง action สำเร็จ
  */
 export class Room {
@@ -86,12 +95,15 @@ export class Room {
   players: PlayerState[] = [];
   hostId = '';
   selectedCategories: string[];
+  private kickedIds = new Set<string>();
   private usedQuestionIds = new Set<number>();
   private gameTopics: Topic[] = [];
   private round: RoundState | null = null;
-  private history: RoundResultView[] = [];
   private final: FinalResultView | null = null;
   private notices: Notice[] = [];
+  private authoring: AuthoringState | null = null;
+  /** คนที่ได้ตั้งโจทย์ไปแล้วในรอบการสุ่มนี้ (ครบทุกคนแล้วเริ่มใหม่) */
+  private authorCycle = new Set<string>();
   /** เวลาที่ห้องไม่มีใครเชื่อมต่ออยู่เลย (null = มีคนอยู่) */
   emptySince: number | null = null;
 
@@ -107,6 +119,10 @@ export class Room {
 
   private get cfg() {
     return this.deps.config;
+  }
+
+  get customMode(): boolean {
+    return this.selectedCategories.length === 1 && this.selectedCategories[0] === CUSTOM_CATEGORY_ID;
   }
 
   private get activePlayers(): PlayerState[] {
@@ -134,6 +150,14 @@ export class Room {
     }
   }
 
+  private get engine(): RevealEngine {
+    const e = this.round?.reveal;
+    if (!e || this.phase !== 'reveal') {
+      throw new GameError('WRONG_PHASE', 'ตอนนี้ไม่ได้อยู่ในช่วงเปิดคำตอบ');
+    }
+    return e;
+  }
+
   private notice(kind: Notice['kind'], message: string) {
     this.notices.push({ kind, message });
   }
@@ -158,6 +182,15 @@ export class Room {
       throw new GameError('INVALID_PAYLOAD', `ชื่อยาวได้ไม่เกิน ${this.cfg.maxNameLength} ตัวอักษร`);
     }
     return name;
+  }
+
+  private resetScores() {
+    for (const p of this.players) {
+      p.totalScore = 0;
+      p.roundTotals = [];
+      p.jinxoTotal = 0;
+      p.totalLikes = 0;
+    }
   }
 
   // ───────────────────────── lobby / membership ─────────────────────────
@@ -188,6 +221,7 @@ export class Room {
       totalScore: 0,
       roundTotals: [],
       jinxoTotal: 0,
+      totalLikes: 0,
     };
     this.players.push(player);
     if (!this.hostId) this.hostId = player.id;
@@ -197,6 +231,9 @@ export class Room {
 
   /** ตรวจ token ตอน reconnect */
   authenticate(playerId: string, token: string): PlayerState {
+    if (this.kickedIds.has(playerId)) {
+      throw new GameError('KICKED', 'คุณถูกนำออกจากห้องโดย Host ถ้าจะกลับเข้าห้อง ให้เข้าใหม่ด้วยรหัสห้อง');
+    }
     const p = this.getPlayer(playerId);
     if (!p || p.left || p.token !== token) {
       throw new GameError('SESSION_INVALID', 'เซสชันหมดอายุแล้ว กรุณาเข้าห้องใหม่อีกครั้ง');
@@ -245,6 +282,25 @@ export class Room {
     if (this.hostId === playerId) this.transferHost();
     if (this.players.every((x) => !x.connected)) this.emptySince = this.now();
     if (this.phase === 'answering') this.maybeAdvanceTopic();
+    if (this.phase === 'authoring' && this.authoring?.authorId === playerId) this.reassignAuthor('left');
+  }
+
+  /**
+   * Host เตะผู้เล่นออก (เฉพาะ Lobby — ไม่กระทบคะแนนระหว่างเกม)
+   * token เดิมใช้ไม่ได้อีก ถ้าจะกลับต้อง Join ใหม่ได้ session ใหม่
+   * คืน socket id ของคนที่ถูกเตะ ให้ชั้น socket แจ้งเตือนและตัดออกจากห้อง
+   */
+  kick(hostId: string, targetId: string): { socketId: string | null; name: string } {
+    this.requireHost(hostId);
+    this.requirePhase('lobby');
+    if (targetId === hostId) throw new GameError('INVALID_PAYLOAD', 'เตะตัวเองไม่ได้นะ');
+    const target = this.getPlayer(targetId);
+    if (!target) throw new GameError('INVALID_PAYLOAD', 'ไม่พบผู้เล่นคนนี้ในห้องแล้ว');
+    this.players = this.players.filter((p) => p.id !== targetId);
+    this.kickedIds.add(targetId);
+    this.notice('info', `${target.name} ถูกนำออกจากห้อง`);
+    if (this.players.every((x) => !x.connected)) this.emptySince = this.now();
+    return { socketId: target.socketId, name: target.name };
   }
 
   private transferHost(): boolean {
@@ -267,13 +323,22 @@ export class Room {
     return true;
   }
 
+  get categoryList(): CategoryInfo[] {
+    return [...this.deps.questions.categories, CUSTOM_CATEGORY];
+  }
+
   setCategories(playerId: string, categories: string[]) {
     this.requireHost(playerId);
     this.requirePhase('lobby');
     const unique = [...new Set(categories)];
     if (unique.length === 0) throw new GameError('INVALID_PAYLOAD', 'เลือกอย่างน้อย 1 หมวดหมู่');
+    if (unique.includes(CUSTOM_CATEGORY_ID) && unique.length > 1) {
+      throw new GameError('INVALID_PAYLOAD', '"คิดโจทย์เอง" ใช้ร่วมกับหมวดอื่นไม่ได้');
+    }
     for (const c of unique) {
-      if (!this.deps.questions.hasCategory(c)) throw new GameError('INVALID_PAYLOAD', `ไม่รู้จักหมวด "${c}"`);
+      if (c !== CUSTOM_CATEGORY_ID && !this.deps.questions.hasCategory(c)) {
+        throw new GameError('INVALID_PAYLOAD', `ไม่รู้จักหมวด "${c}"`);
+      }
     }
     this.selectedCategories = unique;
   }
@@ -295,25 +360,25 @@ export class Room {
         `ต้องมีผู้เล่นออนไลน์อย่างน้อย ${this.cfg.minPlayers} คนถึงจะเริ่มได้`,
       );
     }
-    const topics = this.deps.questions.pick(this.selectedCategories, this.topicsNeeded, this.usedQuestionIds);
-    if (!topics) {
-      throw new GameError(
-        'NOT_ENOUGH_QUESTIONS',
-        `หมวดที่เลือกมีคำถามไม่พอ (ต้องการ ${this.topicsNeeded} ข้อ) เลือกเพิ่มอีกหน่อยนะ`,
-      );
+    if (this.customMode) {
+      this.gameTopics = [];
+    } else {
+      const topics = this.deps.questions.pick(this.selectedCategories, this.topicsNeeded, this.usedQuestionIds);
+      if (!topics) {
+        throw new GameError(
+          'NOT_ENOUGH_QUESTIONS',
+          `หมวดที่เลือกมีคำถามไม่พอ (ต้องการ ${this.topicsNeeded} ข้อ) เลือกเพิ่มอีกหน่อยนะ`,
+        );
+      }
+      for (const t of topics) this.usedQuestionIds.add(t.id);
+      // ถ้าเล่นจนคำถามในหมวดหมดแล้ว ให้เริ่มนับใหม่ในเกมถัดไป
+      if (this.usedQuestionIds.size >= this.deps.questions.countIn(this.selectedCategories)) {
+        this.usedQuestionIds = new Set(topics.map((t) => t.id));
+      }
+      this.gameTopics = topics;
     }
-    for (const t of topics) this.usedQuestionIds.add(t.id);
-    // ถ้าเล่นจนคำถามในหมวดหมดแล้ว ให้เริ่มนับใหม่ในเกมถัดไป
-    if (this.usedQuestionIds.size >= this.deps.questions.countIn(this.selectedCategories)) {
-      this.usedQuestionIds = new Set(topics.map((t) => t.id));
-    }
-    this.gameTopics = topics;
-    for (const p of this.players) {
-      p.totalScore = 0;
-      p.roundTotals = [];
-      p.jinxoTotal = 0;
-    }
-    this.history = [];
+    this.authorCycle.clear();
+    this.resetScores();
     this.final = null;
     this.startRound(0);
   }
@@ -323,20 +388,99 @@ export class Room {
     const participants = this.activePlayers.map((p) => p.id);
     this.round = {
       index,
-      topics: this.gameTopics.slice(index * tpr, (index + 1) * tpr),
+      topics: this.customMode ? [] : this.gameTopics.slice(index * tpr, (index + 1) * tpr),
       currentTopic: 0,
       participants,
       boards: new Map(participants.map((id) => [id, Array<null>(BOARD_SIZE).fill(null)])),
       submitted: new Set(),
       skipped: new Set(),
-      aliases: new Map(),
-      steps: [],
-      revealed: 0,
+      reveal: null,
       result: null,
     };
+    this.beginTopic();
+  }
+
+  /** เริ่มหัวข้อ currentTopic — โหมดคิดโจทย์เองต้องมีคนตั้งโจทย์ก่อน */
+  private beginTopic() {
+    const r = this.round!;
+    r.submitted.clear();
+    r.skipped.clear();
+    if (this.customMode) {
+      this.phase = 'authoring';
+      this.authoring = { authorId: this.pickAuthor(null), topicIndex: r.currentTopic };
+    } else {
+      this.phase = 'answering';
+      this.authoring = null;
+      this.applyAutoSkips();
+    }
+  }
+
+  // ── โหมดคิดโจทย์เอง ──
+
+  /** สุ่มคนตั้งโจทย์จากคนที่ออนไลน์ โดยไม่ซ้ำคนที่ตั้งไปแล้วจนกว่าทุกคนจะได้ตั้ง */
+  private pickAuthor(exclude: string | null): string {
+    const r = this.round!;
+    const active = r.participants.filter((id) => {
+      const p = this.getPlayer(id);
+      return p && !p.left;
+    });
+    const online = active.filter((id) => this.getPlayer(id)!.connected);
+    // ไม่มีใครออนไลน์เลย → ไม่สลับไปมาระหว่างคนที่หลุด รอให้มีคนกลับมาก่อน
+    if (online.length === 0 && exclude) return exclude;
+    let candidates = online.length > 0 ? online : active;
+    if (exclude && candidates.length > 1) candidates = candidates.filter((id) => id !== exclude);
+    let pool = candidates.filter((id) => !this.authorCycle.has(id));
+    if (pool.length === 0) {
+      // ทุกคนที่เลือกได้เคยตั้งโจทย์แล้ว → เริ่มรอบการสุ่มใหม่
+      for (const id of candidates) this.authorCycle.delete(id);
+      pool = candidates;
+    }
+    return pool[randomInt(pool.length)] ?? '';
+  }
+
+  private reassignAuthor(reason: 'left' | 'timeout' | 'host'): boolean {
+    if (this.phase !== 'authoring' || !this.authoring) return false;
+    const prev = this.authoring.authorId;
+    const next = this.pickAuthor(prev);
+    if (next === prev) return false;
+    this.authoring.authorId = next;
+    const prevName = this.getPlayer(prev)?.name ?? 'คนตั้งโจทย์';
+    const nextName = this.getPlayer(next)?.name ?? '?';
+    const why = reason === 'host' ? 'Host สุ่มใหม่' : reason === 'left' ? `${prevName} ออกจากห้อง` : `${prevName} หลุดนานเกินไป`;
+    this.notice('info', `${why} — ตอนนี้ ${nextName} เป็นคนคิดโจทย์`);
+    return true;
+  }
+
+  submitQuestion(playerId: string, rawQuestion: string) {
+    this.mustGetPlayer(playerId);
+    this.requirePhase('authoring');
+    const a = this.authoring!;
+    if (a.authorId !== playerId) throw new GameError('NOT_AUTHOR', 'ตอนนี้ไม่ใช่ตาคุณคิดโจทย์');
+    const question = cleanAnswer(rawQuestion);
+    if ([...question].length < 2) throw new GameError('INVALID_PAYLOAD', 'พิมพ์โจทย์ก่อนนะ');
+    if ([...question].length > this.cfg.maxQuestionLength) {
+      throw new GameError('INVALID_PAYLOAD', `โจทย์ยาวได้ไม่เกิน ${this.cfg.maxQuestionLength} ตัวอักษร`);
+    }
+    const r = this.round!;
+    r.topics[a.topicIndex] = {
+      id: -(r.index * this.cfg.topicsPerRound + a.topicIndex + 1),
+      category: CUSTOM_CATEGORY_ID,
+      question,
+      authorId: playerId,
+    };
+    this.authorCycle.add(playerId);
+    this.authoring = null;
     this.phase = 'answering';
     this.applyAutoSkips();
   }
+
+  rerollAuthor(playerId: string) {
+    this.requireHost(playerId);
+    this.requirePhase('authoring');
+    if (!this.reassignAuthor('host')) throw new GameError('INVALID_PAYLOAD', 'ไม่มีคนอื่นให้สุ่มแทน');
+  }
+
+  // ── ตอบคำถาม ──
 
   private pendingRequired(): string[] {
     const r = this.round;
@@ -431,80 +575,63 @@ export class Room {
     const r = this.round;
     // ทุกคนถูกข้ามหมด (ไม่มีใครตอบเลย) และไม่มีใครออนไลน์ → รอไว้ก่อน ไม่เดินเกมทิ้ง
     if (r.submitted.size === 0 && !r.participants.some((id) => this.getPlayer(id)?.connected)) return false;
-    if (r.currentTopic < r.topics.length - 1) {
+    if (r.currentTopic < this.cfg.topicsPerRound - 1) {
       r.currentTopic += 1;
-      r.submitted.clear();
-      r.skipped.clear();
-      this.maybeAdvanceTopic();
+      this.beginTopic();
+      if (this.phase === 'answering') this.maybeAdvanceTopic();
     } else {
       this.startReveal();
     }
     return true;
   }
 
+  // ───────────────────────── reveal ─────────────────────────
+
   private startReveal() {
     const r = this.round!;
-    r.steps = buildRevealSteps(buildGroups(r.boards), r.topics.length);
-    r.revealed = 0;
-    this.phase = r.steps.length === 0 ? 'review' : 'reveal';
+    // ลำดับเปิดสุ่มครั้งเดียวต่อรอบ เก็บไว้ใน state ทุกคนเห็นเหมือนกัน
+    const order = shuffle(r.participants);
+    r.reveal = new RevealEngine(r.boards, order, this.deps.scoring);
+    this.phase = 'reveal';
   }
 
-  revealNext(playerId: string) {
+  revealNextAnswer(playerId: string) {
     this.requireHost(playerId);
-    this.requirePhase('reveal');
-    const r = this.round!;
-    r.revealed = Math.min(r.revealed + 1, r.steps.length);
-    if (r.revealed >= r.steps.length) this.phase = 'review';
+    this.engine.revealNextAnswer();
   }
 
-  revealAll(playerId: string) {
+  /** ไปคนถัดไป — คนสุดท้ายแล้ว = สรุปรอบ */
+  nextPlayer(playerId: string) {
     this.requireHost(playerId);
-    this.requirePhase('reveal');
-    const r = this.round!;
-    r.revealed = r.steps.length;
-    this.phase = 'review';
+    if (this.engine.nextPlayer() === 'done') this.finalizeRound();
   }
 
-  private currentGroups(): AnswerGroup[] {
-    const r = this.round!;
-    return buildGroups(r.boards, r.aliases);
+  /** ทุกคนเห็นคำขอผ่านการ์ดคิวใน state อยู่แล้ว จึงไม่ต้องส่ง notice ซ้ำ */
+  requestMatch(playerId: string, targetAnswerId: string, cellIndex: number) {
+    this.mustGetPlayer(playerId);
+    this.engine.requestMatch(playerId, targetAnswerId, cellIndex);
   }
 
-  /** Host รวมคำที่สะกดต่างกันแต่ความหมายเดียวกันให้นับว่าตรงกัน */
-  mergeGroups(playerId: string, topicIndex: number, groupIds: string[]) {
+  decideMatch(playerId: string, requestId: string, approve: boolean) {
     this.requireHost(playerId);
-    this.requirePhase('review');
-    const r = this.round!;
-    const ids = [...new Set(groupIds)];
-    if (ids.length < 2) throw new GameError('INVALID_PAYLOAD', 'เลือกอย่างน้อย 2 คำเพื่อรวมกลุ่ม');
-    const groups = new Map(this.currentGroups().map((g) => [g.id, g]));
-    const selected = ids.map((id) => groups.get(id));
-    if (selected.some((g) => !g || g.topicIndex !== topicIndex)) {
-      throw new GameError('INVALID_PAYLOAD', 'รวมได้เฉพาะคำตอบในหัวข้อเดียวกัน');
-    }
-    const target = ids[0];
-    for (const g of selected) {
-      for (const base of g!.baseKeys) {
-        if (base === target) r.aliases.delete(base);
-        else r.aliases.set(base, target);
-      }
-    }
+    this.engine.decide(requestId, approve);
   }
 
-  splitGroup(playerId: string, groupId: string) {
+  undoMatch(playerId: string, requestId: string) {
     this.requireHost(playerId);
-    this.requirePhase('review');
-    const r = this.round!;
-    const g = this.currentGroups().find((x) => x.id === groupId);
-    if (!g || g.baseKeys.length < 2) throw new GameError('INVALID_PAYLOAD', 'กลุ่มนี้ไม่ได้ถูกรวมไว้');
-    for (const base of g.baseKeys) r.aliases.delete(base);
+    this.engine.undo(requestId);
   }
 
-  finalizeRound(playerId: string) {
-    this.requireHost(playerId);
-    this.requirePhase('review');
+  setLike(playerId: string, answerId: string, like: boolean) {
+    this.mustGetPlayer(playerId);
+    this.engine.setLike(playerId, answerId, like);
+  }
+
+  private finalizeRound() {
     const r = this.round!;
-    const scores = scoreRound(r.boards, r.aliases, this.deps.scoring);
+    const engine = r.reveal!;
+    engine.revealEverything();
+    const scores = engine.fullScores();
     for (const id of r.participants) {
       const p = this.getPlayer(id);
       const s = scores.get(id);
@@ -513,12 +640,14 @@ export class Room {
       p.roundTotals[r.index] = roundTotal;
       p.totalScore += roundTotal;
       p.jinxoTotal += s.jinxoCount;
+      p.totalLikes += engine.likesReceived(id);
     }
+    // อันดับใช้เฉพาะ Game Score — Like ไม่เกี่ยว
     const ranked = rank(
       r.participants.map((id) => this.getPlayer(id)).filter((p): p is PlayerState => Boolean(p)),
       (p) => p.totalScore,
     );
-    const result: RoundResultView = {
+    r.result = {
       roundIndex: r.index,
       scores: ranked.map(({ item: p, rank: rk }): PlayerRoundScore => {
         const s = scores.get(p.id)!;
@@ -534,11 +663,14 @@ export class Room {
           jinxoCount: s.jinxoCount,
           matchCount: s.matchCount,
           bonusLines: s.bonusLines,
+          likes: engine.likesReceived(p.id),
+          totalLikes: p.totalLikes,
         };
       }),
+      boards: engine.order.map((pid) => engine.boardView(pid)),
+      topMatched: engine.topMatched(),
+      topLiked: engine.topLiked(),
     };
-    r.result = result;
-    this.history.push(result);
     this.phase = 'roundResult';
   }
 
@@ -552,8 +684,10 @@ export class Room {
     }
     const everyone = this.players.filter((p) => p.roundTotals.length > 0 || !p.left);
     const ranked = rank(everyone, (p) => p.totalScore);
+    const maxLikes = Math.max(0, ...everyone.map((p) => p.totalLikes));
     this.final = {
       winnerIds: ranked.filter((x) => x.rank === 1).map((x) => x.item.id),
+      popularIds: maxLikes > 0 ? everyone.filter((p) => p.totalLikes === maxLikes).map((p) => p.id) : [],
       standings: ranked.map(({ item: p, rank: rk }) => ({
         playerId: p.id,
         name: p.name,
@@ -562,6 +696,7 @@ export class Room {
         rank: rk,
         roundTotals: Array.from({ length: this.cfg.rounds }, (_, i) => p.roundTotals[i] ?? 0),
         jinxoCount: p.jinxoTotal,
+        totalLikes: p.totalLikes,
       })),
     };
     this.phase = 'finalResult';
@@ -571,15 +706,11 @@ export class Room {
     this.requireHost(playerId);
     this.requirePhase('finalResult');
     this.players = this.players.filter((p) => !p.left);
-    for (const p of this.players) {
-      p.totalScore = 0;
-      p.roundTotals = [];
-      p.jinxoTotal = 0;
-    }
+    this.resetScores();
     this.round = null;
-    this.history = [];
     this.final = null;
     this.gameTopics = [];
+    this.authoring = null;
     this.phase = 'lobby';
   }
 
@@ -614,6 +745,17 @@ export class Room {
       changed = this.transferHost() || changed;
     }
 
+    if (this.phase === 'authoring' && this.authoring) {
+      const author = this.getPlayer(this.authoring.authorId);
+      const timedOut =
+        !author ||
+        author.left ||
+        (!author.connected &&
+          author.disconnectedAt !== null &&
+          now - author.disconnectedAt >= this.cfg.disconnectGraceMs);
+      if (timedOut) changed = this.reassignAuthor(author?.left ? 'left' : 'timeout') || changed;
+    }
+
     if (this.phase === 'answering') {
       changed = this.applyAutoSkips() || changed;
       changed = this.maybeAdvanceTopic() || changed;
@@ -628,12 +770,13 @@ export class Room {
 
   // ───────────────────────── views ─────────────────────────
 
-  /** สร้าง state ในมุมมองของผู้เล่นคนหนึ่ง — ไม่มีข้อมูลที่เขาไม่ควรเห็น */
-  viewFor(playerId: string): RoomView {
-    const me = this.getPlayer(playerId)!;
+  /**
+   * ส่วนของ state ที่ทุกคนเห็นเหมือนกัน — คำนวณครั้งเดียวต่อการ broadcast
+   * (สำคัญตอนห้อง 15 คน: ไม่ต้องคิดคะแนน/กระดานซ้ำ 15 รอบ)
+   */
+  sharedView(): Omit<RoomView, 'you' | 'myBoard' | 'myReady' | 'myLikes'> {
     const r = this.round;
     const inGame = this.phase !== 'lobby' && this.phase !== 'finalResult';
-
     const players: PlayerView[] = this.players.map((p) => ({
       id: p.id,
       name: p.name,
@@ -641,108 +784,52 @@ export class Room {
       isHost: p.id === this.hostId,
       connected: p.connected,
       left: p.left,
-      ready: Boolean(inGame && r?.submitted.has(p.id)),
-      skipped: Boolean(inGame && r?.skipped.has(p.id)),
+      ready: Boolean(this.phase === 'answering' && r?.submitted.has(p.id)),
+      skipped: Boolean(this.phase === 'answering' && r?.skipped.has(p.id)),
       totalScore: p.totalScore,
+      totalLikes: p.totalLikes,
     }));
 
     let topics: Topic[] = [];
     if (r && this.phase === 'answering') topics = r.topics.slice(0, r.currentTopic + 1);
-    else if (r && inGame) topics = r.topics;
+    else if (r && inGame) topics = r.topics.filter(Boolean);
 
     const pending = this.phase === 'answering' ? this.pendingRequired().length : 0;
     const readyCount = this.phase === 'answering' && r ? r.submitted.size : 0;
+    const reveal: RevealView | null = this.phase === 'reveal' && r?.reveal ? r.reveal.publicView() : null;
 
     return {
       code: this.code,
       phase: this.phase,
-      you: { id: me.id, name: me.name, isHost: me.id === this.hostId },
       hostId: this.hostId,
       players,
       config: { game: publicGameConfig(this.cfg), scoring: this.deps.scoring },
-      categories: this.deps.questions.categories,
+      categories: this.categoryList,
       selectedCategories: this.selectedCategories,
+      customMode: this.customMode,
       roundIndex: r?.index ?? 0,
       topics,
-      currentTopicIndex: this.phase === 'answering' && r ? r.currentTopic : null,
-      myBoard: (inGame && r?.boards.get(playerId)) || Array<null>(BOARD_SIZE).fill(null),
-      myReady: Boolean(this.phase === 'answering' && r?.submitted.has(playerId)),
+      currentTopicIndex: (this.phase === 'answering' || this.phase === 'authoring') && r ? r.currentTopic : null,
+      authoring: this.phase === 'authoring' ? this.authoring : null,
       readyCount,
       requiredCount: readyCount + pending,
-      reveal: this.phase === 'reveal' || this.phase === 'review' ? this.revealView() : null,
+      reveal,
       roundResult: this.phase === 'roundResult' ? (r?.result ?? null) : null,
       final: this.phase === 'finalResult' ? this.final : null,
     };
   }
 
-  /** เหมือนกันทุกคน (ไม่มีข้อมูลส่วนตัว) */
-  private revealView(): RevealView {
-    const r = this.round!;
-    const scoring = this.deps.scoring;
-    const groups = buildGroups(r.boards, r.aliases);
-    const byCell = indexGroups(groups);
-    const revealedBase = new Set(r.steps.slice(0, r.revealed).flatMap((s) => s.baseKeys));
-
-    const boards: RevealBoardView[] = r.participants.map((pid) => {
-      const board = r.boards.get(pid)!;
-      const score = scoreBoard(pid, board, byCell, scoring);
-      const shown = board.map((cell) => Boolean(cell && revealedBase.has(baseKeyOf(cell.topicIndex, cell.text))));
-      const cells: RevealCell[] = board.map((cell, i) => {
-        if (!cell) return { state: 'empty' };
-        if (!shown[i]) return { state: 'hidden', topicIndex: cell.topicIndex };
-        const cs = score.cells[i]!;
-        return {
-          state: 'shown',
-          topicIndex: cell.topicIndex,
-          text: cell.text,
-          groupId: cs.groupId,
-          kind: cs.kind,
-          playerCount: cs.playerCount,
-          points: cs.points,
-        };
-      });
-      const bonusLines = score.bonusLines.filter((l) => LINES[l].every((i) => shown[i]));
-      const previewPoints =
-        score.cells.reduce((s, c, i) => s + (c && shown[i] ? c.points : 0), 0) +
-        bonusLines.reduce((s, l) => s + lineBonusValue(l, scoring), 0);
-      return { playerId: pid, cells, bonusLines, previewPoints };
-    });
-
-    const groupViews: AnswerGroupView[] = groups
-      .filter((g) => g.baseKeys.some((k) => revealedBase.has(k)))
-      .map((g) => {
-        const counts = new Map<string, number>();
-        for (const m of g.members) counts.set(m.text, (counts.get(m.text) ?? 0) + 1);
-        const variants = [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([t]) => t);
-        const { points, kind } = tierFor(g.playerIds.length, scoring);
-        return {
-          id: g.id,
-          topicIndex: g.topicIndex,
-          label: variants[0],
-          variants,
-          baseKeyCount: g.baseKeys.length,
-          playerIds: g.playerIds,
-          playerCount: g.playerIds.length,
-          kind,
-          pointsPerCell: points,
-        };
-      })
-      .sort((a, b) => a.topicIndex - b.topicIndex || b.playerCount - a.playerCount || a.label.localeCompare(b.label, 'th'));
-
-    const last = r.revealed > 0 ? r.steps[r.revealed - 1] : null;
+  /** state ในมุมมองของผู้เล่นคนหนึ่ง — เติมเฉพาะข้อมูลของเขาเองลงบนส่วนที่แชร์ */
+  viewFor(playerId: string, shared = this.sharedView()): RoomView {
+    const me = this.getPlayer(playerId)!;
+    const r = this.round;
+    const inGame = this.phase !== 'lobby' && this.phase !== 'finalResult';
     return {
-      revealedSteps: r.revealed,
-      totalSteps: r.steps.length,
-      lastStep: last
-        ? {
-            index: r.revealed - 1,
-            topicIndex: last.topicIndex,
-            kind: last.kind,
-            groupIds: [...new Set(last.baseKeys.map((k) => canonicalOf(k, r.aliases)))],
-          }
-        : null,
-      boards,
-      groups: groupViews,
+      ...shared,
+      you: { id: me.id, name: me.name, isHost: me.id === this.hostId },
+      myBoard: (inGame && r?.boards.get(playerId)) || Array<null>(BOARD_SIZE).fill(null),
+      myReady: Boolean(this.phase === 'answering' && r?.submitted.has(playerId)),
+      myLikes: this.phase === 'reveal' && r?.reveal ? r.reveal.likedBy(playerId) : [],
     };
   }
 }

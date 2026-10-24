@@ -29,7 +29,8 @@ export function Button({
 }
 
 export function Avatar({ name, color, size = 36, dim = false }: { name: string; color: number; size?: number; dim?: boolean }) {
-  const initial = [...name.trim()][0] ?? '?';
+  // ชื่อไทยที่ขึ้นต้นด้วยสระหน้า (เ แ โ ใ ไ) ใช้พยัญชนะตัวแรกแทน เช่น "โมส" → "ม"
+  const initial = [...name.trim().replace(/^[\u0E40-\u0E44]+/, '')][0] ?? [...name.trim()][0] ?? '?';
   return (
     <span
       aria-hidden

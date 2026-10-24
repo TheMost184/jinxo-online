@@ -16,6 +16,9 @@ export function RulesSummary({ scoring }: { scoring: PublicScoringConfig }) {
           <span className="font-display text-lg">{t.points} แต้ม</span>
         </div>
       ))}
+      <p className="mt-1 text-ink-soft">
+        คำที่สะกดต่างแต่หมายถึงสิ่งเดียวกัน เสนอให้ Host จับคู่ได้ตอนเปิดคำตอบ ถ้ากระดานเดียวมีหลายคำในกลุ่มเดียวกัน นับแต้มแค่คำเดียว
+      </p>
       {lb.enabled && (
         <p className="mt-1 text-ink-soft">
           โบนัสแนว: ถ้าทั้ง 3 ช่องในแถวหรือคอลัมน์{lb.condition === 'jinxo' ? 'เป็น JinxO ทั้งหมด' : 'ตรงกับเพื่อนทั้งหมด'}

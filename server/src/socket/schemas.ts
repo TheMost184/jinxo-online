@@ -23,9 +23,13 @@ export const schemas = {
       .array(z.object({ cellIndex: z.number().int(), text: z.string().max(300) }))
       .max(9),
   }),
-  merge: z.object({
-    topicIndex: z.number().int().min(0).max(20),
-    groupIds: z.array(z.string().max(200)).min(2).max(50),
+  kick: z.object({ playerId: z.string().min(1).max(64) }),
+  question: z.object({ question: z.string().max(500) }),
+  matchRequest: z.object({
+    targetAnswerId: z.string().min(1).max(100),
+    cellIndex: z.number().int().min(0).max(8),
   }),
-  split: z.object({ groupId: z.string().max(200) }),
+  matchDecide: z.object({ requestId: z.string().min(1).max(40), approve: z.boolean() }),
+  matchUndo: z.object({ requestId: z.string().min(1).max(40) }),
+  like: z.object({ answerId: z.string().min(1).max(100), like: z.boolean() }),
 };

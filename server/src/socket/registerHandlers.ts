@@ -29,11 +29,13 @@ export function registerHandlers(io: IoServer, rooms: RoomManager) {
   /** ส่ง state ที่ตัดตามมุมมองของแต่ละคน + notice ให้ทุกคนในห้อง */
   function broadcast(room: Room) {
     const notices = room.takeNotices();
+    // ส่วนที่ทุกคนเห็นเหมือนกันคำนวณครั้งเดียว แล้วเติมข้อมูลส่วนตัวของแต่ละคน
+    const shared = room.sharedView();
     for (const p of room.players) {
       if (!p.socketId || p.left) continue;
       const s = io.sockets.sockets.get(p.socketId);
       if (!s) continue;
-      s.emit('room:state', room.viewFor(p.id));
+      s.emit('room:state', room.viewFor(p.id, shared));
       for (const n of notices) s.emit('room:notice', n);
     }
     if (room.isAbandoned()) rooms.delete(room.code);
@@ -171,6 +173,18 @@ export function registerHandlers(io: IoServer, rooms: RoomManager) {
       return { result: null, room };
     });
 
+    on('lobby:kick', schemas.kick, ({ playerId: targetId }, { bound: b }) => {
+      const { room, playerId } = b();
+      const kicked = room.kick(playerId, targetId);
+      const ks = kicked.socketId ? io.sockets.sockets.get(kicked.socketId) : undefined;
+      if (ks) {
+        ks.data.roomCode = undefined;
+        ks.data.playerId = undefined;
+        ks.emit('room:kicked', { kind: 'warn', message: 'คุณถูกนำออกจากห้องโดย Host' });
+      }
+      return { result: null, room };
+    });
+
     on('game:start', null, (_p, { bound: b }) => {
       const { room, playerId } = b();
       room.start(playerId);
@@ -190,38 +204,57 @@ export function registerHandlers(io: IoServer, rooms: RoomManager) {
       return { result: null, room };
     });
 
-    // ── reveal & review ──
-    on('reveal:next', null, (_p, { bound: b }) => {
+    // ── โหมดคิดโจทย์เอง ──
+    on('question:submit', schemas.question, ({ question }, { bound: b }) => {
       const { room, playerId } = b();
-      room.revealNext(playerId);
+      room.submitQuestion(playerId, question);
       return { result: null, room };
     });
 
-    on('reveal:all', null, (_p, { bound: b }) => {
+    on('host:rerollAuthor', null, (_p, { bound: b }) => {
       const { room, playerId } = b();
-      room.revealAll(playerId);
+      room.rerollAuthor(playerId);
       return { result: null, room };
     });
 
-    on('review:merge', schemas.merge, ({ topicIndex, groupIds }, { bound: b }) => {
+    // ── reveal ทีละคน ──
+    on('reveal:nextAnswer', null, (_p, { bound: b }) => {
       const { room, playerId } = b();
-      room.mergeGroups(playerId, topicIndex, groupIds);
+      room.revealNextAnswer(playerId);
       return { result: null, room };
     });
 
-    on('review:split', schemas.split, ({ groupId }, { bound: b }) => {
+    on('reveal:nextPlayer', null, (_p, { bound: b }) => {
       const { room, playerId } = b();
-      room.splitGroup(playerId, groupId);
+      room.nextPlayer(playerId);
+      return { result: null, room };
+    });
+
+    on('match:request', schemas.matchRequest, ({ targetAnswerId, cellIndex }, { bound: b }) => {
+      const { room, playerId } = b();
+      room.requestMatch(playerId, targetAnswerId, cellIndex);
+      return { result: null, room };
+    });
+
+    on('match:decide', schemas.matchDecide, ({ requestId, approve }, { bound: b }) => {
+      const { room, playerId } = b();
+      room.decideMatch(playerId, requestId, approve);
+      return { result: null, room };
+    });
+
+    on('match:undo', schemas.matchUndo, ({ requestId }, { bound: b }) => {
+      const { room, playerId } = b();
+      room.undoMatch(playerId, requestId);
+      return { result: null, room };
+    });
+
+    on('answer:like', schemas.like, ({ answerId, like }, { bound: b }) => {
+      const { room, playerId } = b();
+      room.setLike(playerId, answerId, like);
       return { result: null, room };
     });
 
     // ── results ──
-    on('round:finalize', null, (_p, { bound: b }) => {
-      const { room, playerId } = b();
-      room.finalizeRound(playerId);
-      return { result: null, room };
-    });
-
     on('round:next', null, (_p, { bound: b }) => {
       const { room, playerId } = b();
       room.nextRound(playerId);

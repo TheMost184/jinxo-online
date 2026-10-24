@@ -157,10 +157,14 @@ function AnswerRound() {
                 <span>
                   หัวข้อ {topicIndex + 1} จาก {topicsPerRound}
                 </span>
-                {category && (
-                  <span>
-                    {category.emoji} {category.label}
-                  </span>
+                {topic?.authorId ? (
+                  <span>✍️ โจทย์จาก {room.players.find((p) => p.id === topic.authorId)?.name ?? 'เพื่อน'}</span>
+                ) : (
+                  category && (
+                    <span>
+                      {category.emoji} {category.label}
+                    </span>
+                  )
                 )}
               </div>
               <h1 className="text-3xl leading-tight font-medium sm:text-4xl">{topic?.question}</h1>

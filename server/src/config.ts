@@ -10,12 +10,13 @@ export const SERVER_ROOT = resolve(here, '..');
 const gameSchema = z
   .object({
     minPlayers: z.number().int().min(2),
-    maxPlayers: z.number().int().max(12),
+    maxPlayers: z.number().int().max(30),
     rounds: z.number().int().min(1).max(10),
     topicsPerRound: z.number().int().min(1).max(9),
     answersPerTopic: z.number().int().min(1).max(9),
     maxAnswerLength: z.number().int().min(5).max(100),
     maxNameLength: z.number().int().min(3).max(30),
+    maxQuestionLength: z.number().int().min(10).max(200).default(80),
     disconnectGraceMs: z.number().int().min(0),
     hostTransferGraceMs: z.number().int().min(0),
     lobbyDisconnectRemoveMs: z.number().int().min(0),
@@ -76,5 +77,6 @@ export function publicGameConfig(c: GameConfig = gameConfig): PublicGameConfig {
     answersPerTopic: c.answersPerTopic,
     maxAnswerLength: c.maxAnswerLength,
     maxNameLength: c.maxNameLength,
+    maxQuestionLength: c.maxQuestionLength,
   };
 }

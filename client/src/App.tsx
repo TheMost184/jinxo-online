@@ -10,13 +10,14 @@ import { HomePage } from './pages/HomePage';
 import { LeaderboardPage } from './pages/LeaderboardPage';
 import { LobbyPage } from './pages/LobbyPage';
 import { RevealPage } from './pages/RevealPage';
+import { AuthoringPage } from './pages/AuthoringPage';
 
 /** หน้าที่แสดงขึ้นกับ phase ที่ server กำหนด — ทุกคนในห้องจึงอยู่หน้าเดียวกันเสมอ */
 const PAGES: Record<Phase, () => React.JSX.Element | null> = {
   lobby: LobbyPage,
+  authoring: AuthoringPage,
   answering: GamePage,
   reveal: RevealPage,
-  review: RevealPage,
   roundResult: LeaderboardPage,
   finalResult: FinalResultPage,
 };
@@ -39,8 +40,7 @@ export function App() {
     );
   } else if (room) {
     const Page = PAGES[room.phase];
-    // reveal กับ review เป็นหน้าเดียวกัน ไม่ต้องเล่น transition
-    key = room.phase === 'review' ? 'reveal' : `${room.phase}-${room.roundIndex}`;
+    key = `${room.phase}-${room.roundIndex}`;
     content = (
       <>
         <TopBar />

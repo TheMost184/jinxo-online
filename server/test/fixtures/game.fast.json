@@ -1,11 +1,12 @@
 {
   "minPlayers": 3,
-  "maxPlayers": 7,
+  "maxPlayers": 15,
   "rounds": 3,
   "topicsPerRound": 3,
   "answersPerTopic": 3,
   "maxAnswerLength": 40,
   "maxNameLength": 16,
+  "maxQuestionLength": 80,
   "disconnectGraceMs": 1500,
   "hostTransferGraceMs": 1200,
   "lobbyDisconnectRemoveMs": 2000,

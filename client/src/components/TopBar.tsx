@@ -5,9 +5,9 @@ import { Button, Modal } from './ui';
 
 const PHASE_LABEL: Record<string, string> = {
   lobby: 'ห้องรอ',
+  authoring: 'คิดโจทย์',
   answering: 'ตอบคำถาม',
   reveal: 'เปิดคำตอบ',
-  review: 'ตรวจคำตอบ',
   roundResult: 'สรุปรอบ',
   finalResult: 'จบเกม',
 };
